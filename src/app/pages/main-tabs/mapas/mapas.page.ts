@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { Map, tileLayer, marker } from 'leaflet';
+//import { Map, tileLayer, marker } from 'leaflet';
 import * as L from 'leaflet';
 import { Modelusuario } from 'src/app/models/modelUsusario/modelusuario';
 import { Modeltorneo } from 'src/app/models/modelTorneo/modeltorneo';
@@ -16,48 +16,53 @@ import { Ambiente } from 'src/app/services/ambiente';
 })
 export class MapasPage implements OnInit {
 
-  constructor(
-    private usuarioService: UsuarioService, 
-    private torneoService: TorneoService, 
-    private mapsService: MapsService,
-    private storage: StorageComponent,
-    private ambiente: Ambiente
-  ) 
-  {  }
-
-  mymap: Map;
-  marker: any;
-  popup: any;
-
   usuarioLogueado: Modelusuario;
-  
+
   //----- LAS VARIABLES DECLARADAS GLOBALMENTE NO SE GUARDAN-----//
 
-  listaUsuarios: Modelusuario[];  //Lista de Usuarios
-  listaTorneos: Modeltorneo[];    //Lista de Torneos
+  listaUsuarios: Modelusuario[] = [];  //Lista de Usuarios
+  listaTorneos: Modeltorneo[] = [];    //Lista de Torneos
 
   redMarker: any;
   greenMarker: any;
   goldMarker: any;
+  mymap: any;
+  baseLayer: any;
 
-  ngOnInit() {
-    this.mymap = new Map('mapid');
+  constructor(
+    private usuarioService: UsuarioService,
+    private torneoService: TorneoService,
+    private mapsService: MapsService,
+    private storage: StorageComponent,
+    private ambiente: Ambiente
+  ) { }
 
-    tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+
+  async ngOnInit() {
+    await this.loadMap();
+  }
+
+
+  ionViewDidLoad() {
+
+  }
+
+  async ionViewDidEnter() {
+
+   // await this.loadMap();
+    await this.loadUsuarios();
+
+  }
+
+  async loadMap() {
+
+    let position;
+
+    this.baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: 'Map data © <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>',
-      /*
-      maxZoom: 18, 
-      tileSize: 512, 
-      zoomOffset: -1
-      */
-    }).addTo(this.mymap);
-
-    this.mymap.on('click', this.onMapClick);
+    });
 
     this.usuarioLogueado = JSON.parse(this.storage.getUser());
-
-    this.listaUsuarios = [];
-    this.listaTorneos = [];
 
     this.redMarker = new L.Icon({
       iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
@@ -85,81 +90,72 @@ export class MapasPage implements OnInit {
       popupAnchor: [1, -34],
       shadowSize: [41, 41]
     });
-  }
-
-  /* 
-  ionViewDidLoad(){
-
-  } */
-
-  async ionViewDidEnter(){
-    await this.loadMap();
-    await this.loadUsuarios();
-
-  }
-  
-  async loadMap(){
-
-    let position;
     await this.mapsService.getCurrentPosition().then(pos => { position = pos as [number]; });
 
     //let mypopup = R.responsivePopup({ closeOnClick: true, autoClose: true, hasTip: true, offset: [15, 20]}).setContent("<div><ion-chip color=\"primary\"><ion-avatar><img src=\""+ this.ambiente.path + this.usuarioLogueado.rutaimagen + "\"/></ion-avatar><ion-label>"+this.usuarioLogueado.username+"</ion-label></ion-chip></div>");
 
-    L.marker([position[1],position[0]], {icon: this.redMarker})
-    .bindPopup("<div><ion-chip color=\"primary\"><ion-avatar><img src=\""+ this.ambiente.path + this.usuarioLogueado.rutaimagen + "\"/></ion-avatar><ion-label>"+this.usuarioLogueado.username+"</ion-label></ion-chip></div>", {minWidth: 150, closeOnClick: true, autoClose: true})
-    .addTo(this.mymap).openPopup();
 
-    this.mymap.setView([position[1], position[0]], 16);
+    // Inicializamos el mapa
+    this.mymap = L.map('mapid', {
+      layers: [this.baseLayer]
+    }).setView([position[1], position[0]], 16);
 
+
+    L.marker([position[1], position[0]], { icon: this.redMarker })
+      .bindPopup("<div><ion-chip color=\"primary\"><ion-avatar><img src=\"" + this.ambiente.path + this.usuarioLogueado.rutaimagen + "\"/></ion-avatar><ion-label>" + this.usuarioLogueado.username + "</ion-label></ion-chip></div>", { minWidth: 150, closeOnClick: true, autoClose: true })
+      .addTo(this.mymap).openPopup();
+    console.log("this.map loadMap", this.mymap);
+
+    this.mymap.on('click', (e) => {
+      console.log("this.map onclick", this.mymap);
+      new L.Marker([e.latlng.lat, e.latlng.lng], { icon: this.greenMarker }).bindPopup("Has pulsado aquí").addTo(this.mymap).openPopup();
+    });
+
+ 
   }
 
-  onMapClick(e) {
-    console.log(this);
-    let lat = parseFloat(e.latlng.lat);
-    let long = parseFloat(e.latlng.lng);
-    console.log("You clicked the map at " + e.latlng.lat + " " + e.latlng.lng);
-    console.log(this.mymap);
-    L.marker([lat, long], {icon: this.greenMarker}).bindPopup("Has pulsado aquí").addTo(this.mymap).openPopup();
+  addMarker(lat, long){
+    L.marker([lat, long], { icon: this.greenMarker }).bindPopup("Has pulsado aquí").addTo(this.mymap).openPopup();
   }
 
-  loadUsuarios(){
+  loadUsuarios() {
     this.usuarioService.getAllUsuarios()
-    .subscribe((usrs) => {
-      this.listaUsuarios = usrs as Modelusuario[];
-      console.log(this.listaUsuarios);
-      
-      this.listaUsuarios.forEach((usuario) => {
-        try{
-            L.marker([usuario.punto.coordinates[1], usuario.punto.coordinates[0]])
-            .bindPopup("<ion-chip color=\"primary\"><ion-avatar><img src=\""+ this.ambiente.path + usuario.rutaimagen + "\"/></ion-avatar><ion-label>"+ usuario.username +"</ion-label></ion-chip>", {minWidth: 150, closeOnClick: true, autoClose: true})
-            .addTo(this.mymap);
-        }
-        catch(err){
-          console.log("No se ha podido cargar ubicación del Usuario ", usuario.username);
-        }
+      .subscribe((usrs) => {
+        this.listaUsuarios = usrs as Modelusuario[];
+        console.log(this.listaUsuarios);
+
+        this.listaUsuarios.forEach((usuario) => {
+          try {
+            new L.Marker([usuario.punto.coordinates[1], usuario.punto.coordinates[0]])
+              .bindPopup("<ion-chip color=\"primary\"><ion-avatar><img src=\"" + this.ambiente.path + usuario.rutaimagen + "\"/></ion-avatar><ion-label>" + usuario.username + "</ion-label></ion-chip>", { minWidth: 150, closeOnClick: true, autoClose: true })
+              .addTo(this.mymap);
+          }
+          catch (err) {
+            console.log("No se ha podido cargar ubicación del Usuario ", usuario.username);
+          }
+        });
+      },
+        (err) => {
+          console.log("err", err);
+        });
+  }
+
+  testReverseGeocode() {
+    this.mapsService.getReverseGeocode(41.2755526, 1.9872382)
+      .subscribe((res) => {
+        let ciudad: any = res.address.town;
+        console.log(ciudad);
       });
-    },
-    (err) => {
-      console.log("err", err);
-    });
   }
 
-  testReverseGeocode(){
-    this.mapsService.getReverseGeocode(41.2755526,1.9872382)
-    .subscribe((res) => { 
-      let ciudad: any = res.address.town;
-      console.log(ciudad);
-    });
-  }
-
-/*   async getTorneos(){
-    this.torneoService.getAllTorneos()
-    .subscribe((trns) => {
-      this.listaTorneos = trns as Modeltorneo[];
-    },
-    (err) => {
-      console.log("err", err);
-    });
-  } */
+  /*   async getTorneos(){
+      this.torneoService.getAllTorneos()
+      .subscribe((trns) => {
+        this.listaTorneos = trns as Modeltorneo[];
+      },
+      (err) => {
+        console.log("err", err);
+      });
+    } */
 
 }
